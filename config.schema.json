@@ -138,6 +138,36 @@
                 }
               }
             }
+          },
+          "motionSensors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "title": "Accessory name",
+                  "type": "string",
+                  "required": true
+                },
+                "type": {
+                  "title": "Sensor Type",
+                  "description": "RFXCOM type (lighting2)",
+                  "type": "string",
+                  "required": true
+                },
+                "subtype": {
+                  "title": "Subtype id",
+                  "description": "RFXCom subtype (AC for lighting2 is 0)",
+                  "type": "integer",
+                  "required": true
+                },
+                "id": {
+                  "title": "Sensor ID",
+                  "type": "string",
+                  "required": true
+                }
+              }
+            }
           }
         }
       }

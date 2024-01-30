@@ -18,6 +18,11 @@ import {
 } from './accessories/weatherSensorAccessory';
 import { Device } from './device';
 import { SwitchDevice, SwitchAccessory } from './accessories/switchAccessory';
+import {
+  MotionSensorAccessory,
+  MotionSensorDevice,
+  MotionSensorEvent,
+} from './accessories/motionSensorAccessory';
 
 /**
  * HomebridgePlatform
@@ -102,12 +107,7 @@ export class RFXCOMAccessories implements DynamicPlatformPlugin {
     this.devices.push(
       ...(this.config.devices.weatherSensors?.map(
         (device) =>
-          new WeatherSensorDevice(
-            this.api,
-            device.id,
-            device.name,
-            device.type,
-          ),
+          new WeatherSensorDevice(this.api, device.id, device.name, device.type),
       ) || []),
     );
 
@@ -116,6 +116,21 @@ export class RFXCOMAccessories implements DynamicPlatformPlugin {
       ...(this.config.devices.switch?.map(
         (device) =>
           new SwitchDevice(
+            this.api,
+            device.id,
+            device.name,
+            device.type,
+            device.subtype,
+            device.forceOffAtStartup,
+          ),
+      ) || []),
+    );
+
+    // Load MotionSensor
+    this.devices.push(
+      ...(this.config.devices.motionSensors?.map(
+        (device) =>
+          new MotionSensorDevice(
             this.api,
             device.id,
             device.name,
@@ -147,6 +162,7 @@ export class RFXCOMAccessories implements DynamicPlatformPlugin {
     this.discoverRFYDevices();
     this.discoverWeatherSensorDevices();
     this.discoverSwitchDevices();
+    this.discoverMotionSensorDevices();
   }
 
   /**
@@ -250,6 +266,76 @@ export class RFXCOMAccessories implements DynamicPlatformPlugin {
         this.accessories.push(accessory);
       }
     };
+  }
+
+  /**
+   * Register Motion sensors
+   */
+  private discoverMotionSensorDevices() {
+
+    const handleDevice = (device, event) => {
+      const existingAccessory = this.accessories.find(
+        (accessory) => accessory.UUID === device.uuid,
+      );
+
+      if (existingAccessory){
+        existingAccessory.context.device = device;
+        new MotionSensorAccessory(this, existingAccessory, event);
+        this.api.updatePlatformAccessories([existingAccessory]);
+
+      }
+    };
+
+    const addHandler = (type) => {
+      this.rfxcom.on(type, (e) => handleEvent(type, e));
+    };
+    addHandler('lighting2');
+
+    const handleEvent = (type, event) => {
+      if (this.config.discover) {
+        this.log.info(`MotionSensor event '${type}' received:\n`, event);
+      }
+
+      // handle only configured devices
+      const device = this.devices
+        .filter((d) => d instanceof MotionSensorDevice)
+        .find((d) => d.id === event.id && (d as MotionSensorDevice).type === type);
+
+      if (device !== undefined) {
+        handleDevice(
+          device,
+          new MotionSensorEvent(event.commandNumber === 1),
+        );
+      } else {
+        this.log.info(`MotionSensor event '${type}' ignored:\n`, event);
+      }
+    };
+
+    for (const device of this.devices.filter((d)=> d instanceof MotionSensorDevice)){
+      this.log.warn('MotionSensor device:', device.name);
+
+      const existingAccessory = this.accessories.find(
+        accessory => accessory.UUID === device.uuid,
+      );
+      if (existingAccessory){
+        this.log.warn('Existing accessory');
+        existingAccessory.context.device = device;
+        new MotionSensorAccessory(this, existingAccessory, new MotionSensorEvent(false));
+        this.api.updatePlatformAccessories([existingAccessory]);
+      }else{
+        // the accessory does not exists, so we need to create it
+        this.log.info('Adding new accessory:', device.name);
+        const accessory = new this.api.platformAccessory(
+          device.name,
+          device.uuid,
+        );
+        accessory.context.device = device;
+        new MotionSensorAccessory(this, accessory, new MotionSensorEvent(false));
+
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.accessories.push(accessory);
+      }
+    }
   }
 
   /**
